@@ -11,8 +11,8 @@ When given an image:
 
 Keep responses concise but rich. Use bullet points only when listing multiple items. Be conversational and engaging. Never be robotic.`;
 
-const MODEL = "claude-sonnet-4-20250514";
-const API_KEY = process.env.REACT_APP_ANTHROPIC_API_KEY;
+const MODEL = "gpt-4o";
+const API_KEY = process.env.REACT_APP_OPENAI_API_KEY;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -185,7 +185,7 @@ export default function App() {
   };
 
   const buildApiMessages = (history, userText, userImage) => {
-    const apiMessages = [];
+    const apiMessages = [{ role: "system", content: SYSTEM_PROMPT }];
     for (const m of history) {
       if (m.isTyping || !m.text) continue;
       if (m.role === "assistant") {
@@ -193,7 +193,7 @@ export default function App() {
       } else {
         const parts = [];
         if (m.image) {
-          parts.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: m.image } });
+          parts.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${m.image}` } });
         }
         if (m.text) parts.push({ type: "text", text: m.text });
         apiMessages.push({ role: "user", content: parts.length === 1 && parts[0].type === "text" ? m.text : parts });
@@ -201,7 +201,7 @@ export default function App() {
     }
     const parts = [];
     if (userImage) {
-      parts.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: userImage } });
+      parts.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${userImage}` } });
     }
     parts.push({ type: "text", text: userText || (userImage ? "What do you see in this image?" : "") });
     apiMessages.push({
@@ -215,7 +215,7 @@ export default function App() {
     const text = overrideText ?? input.trim();
     if (!text && !imageBase64) return;
     if (!API_KEY) {
-      setError("⚠️ Missing API key. Add REACT_APP_ANTHROPIC_API_KEY to your .env file.");
+      setError("⚠️ Missing API key. Add REACT_APP_OPENAI_API_KEY to your .env file.");
       return;
     }
     setError(null);
@@ -236,18 +236,15 @@ export default function App() {
     try {
       const apiMessages = buildApiMessages(messages, userMsg.text, userMsg.image);
 
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": API_KEY,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
+          "Authorization": `Bearer ${API_KEY}`,
         },
         body: JSON.stringify({
           model: MODEL,
           max_tokens: 1000,
-          system: SYSTEM_PROMPT,
           messages: apiMessages,
         }),
       });
@@ -258,7 +255,7 @@ export default function App() {
       }
 
       const data = await resp.json();
-      const reply = data.content?.find(b => b.type === "text")?.text || "Sorry, I couldn't generate a response.";
+      const reply = data.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.";
 
       setMessages(prev => {
         const copy = [...prev];
