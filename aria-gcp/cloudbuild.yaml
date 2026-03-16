@@ -1,0 +1,48 @@
+# ── ARIA — Google Cloud Build CI/CD Pipeline ─────────────────────────────────
+# Triggered automatically on git push to main branch
+# Builds Docker image → Pushes to Container Registry → Deploys to Cloud Run
+
+steps:
+  # Step 1: Build Docker image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/aria-agent:$COMMIT_SHA"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/aria-agent:latest"
+      - "."
+    id: "build-image"
+
+  # Step 2: Push image to Container Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "gcr.io/$PROJECT_ID/aria-agent:$COMMIT_SHA"
+    id: "push-image"
+    waitFor: ["build-image"]
+
+  # Step 3: Deploy to Cloud Run
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "aria-agent"
+      - "--image=gcr.io/$PROJECT_ID/aria-agent:$COMMIT_SHA"
+      - "--region=us-central1"
+      - "--platform=managed"
+      - "--allow-unauthenticated"
+      - "--memory=512Mi"
+      - "--set-env-vars=GOOGLE_CLOUD_PROJECT=$PROJECT_ID"
+    id: "deploy-cloudrun"
+    waitFor: ["push-image"]
+
+images:
+  - "gcr.io/$PROJECT_ID/aria-agent:$COMMIT_SHA"
+  - "gcr.io/$PROJECT_ID/aria-agent:latest"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: "1200s"
