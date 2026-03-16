@@ -12,6 +12,7 @@ When given an image:
 Keep responses concise but rich. Use bullet points only when listing multiple items. Be conversational and engaging. Never be robotic.`;
 
 const MODEL = "claude-sonnet-4-20250514";
+const API_KEY = process.env.REACT_APP_ANTHROPIC_API_KEY;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -107,8 +108,6 @@ function TypingDots() {
   );
 }
 
-// ── Waveform ──────────────────────────────────────────────────────────────────
-
 function Waveform({ active }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 3, height: 24 }}>
@@ -124,8 +123,6 @@ function Waveform({ active }) {
     </div>
   );
 }
-
-// ── Image preview strip ───────────────────────────────────────────────────────
 
 function ImagePreview({ src, onRemove }) {
   return (
@@ -163,7 +160,7 @@ export default function App() {
   const [imageBase64, setImageBase64] = useState(null);
   const [listening, setListening] = useState(false);
   const [error, setError] = useState(null);
-  const [mode, setMode] = useState("chat"); // chat | vision | creative
+  const [mode, setMode] = useState("chat");
   const bottomRef = useRef(null);
   const fileRef = useRef(null);
   const inputRef = useRef(null);
@@ -189,14 +186,11 @@ export default function App() {
 
   const buildApiMessages = (history, userText, userImage) => {
     const apiMessages = [];
-
-    // Convert history (skip typing indicators)
     for (const m of history) {
       if (m.isTyping || !m.text) continue;
       if (m.role === "assistant") {
         apiMessages.push({ role: "assistant", content: m.text });
       } else {
-        // user — could have image
         const parts = [];
         if (m.image) {
           parts.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: m.image } });
@@ -205,8 +199,6 @@ export default function App() {
         apiMessages.push({ role: "user", content: parts.length === 1 && parts[0].type === "text" ? m.text : parts });
       }
     }
-
-    // Current user turn
     const parts = [];
     if (userImage) {
       parts.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: userImage } });
@@ -216,13 +208,16 @@ export default function App() {
       role: "user",
       content: parts.length === 1 ? parts[0].text : parts,
     });
-
     return apiMessages;
   };
 
   const sendMessage = useCallback(async (overrideText) => {
     const text = overrideText ?? input.trim();
     if (!text && !imageBase64) return;
+    if (!API_KEY) {
+      setError("⚠️ Missing API key. Add REACT_APP_ANTHROPIC_API_KEY to your .env file.");
+      return;
+    }
     setError(null);
 
     const userMsg = {
@@ -233,7 +228,6 @@ export default function App() {
     };
 
     const typingMsg = { role: "assistant", isTyping: true, text: "", time: new Date() };
-
     setMessages(prev => [...prev, userMsg, typingMsg]);
     setInput("");
     removeImage();
@@ -246,7 +240,7 @@ export default function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": "ignored",
+          "x-api-key": API_KEY,
           "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true",
         },
@@ -273,7 +267,7 @@ export default function App() {
         return copy;
       });
     } catch (e) {
-      setError("Connection error. Please try again.");
+      setError(`Error: ${e.message}`);
       setMessages(prev => prev.filter(m => !m.isTyping));
     } finally {
       setLoading(false);
@@ -291,11 +285,7 @@ export default function App() {
     { label: "🌐 Translate", text: "Translate any text you see in this image." },
   ];
 
-  const modeColors = {
-    chat: "#7c4dff",
-    vision: "#00e5ff",
-    creative: "#ff4081",
-  };
+  const modeColors = { chat: "#7c4dff", vision: "#00e5ff", creative: "#ff4081" };
 
   return (
     <div style={{
@@ -325,56 +315,39 @@ export default function App() {
       `}</style>
 
       {/* Header */}
-      <div style={{
-        width: "100%", maxWidth: 720,
-        padding: "20px 20px 0",
-      }}>
+      <div style={{ width: "100%", maxWidth: 720, padding: "20px 20px 0" }}>
         <div style={{
           background: "linear-gradient(135deg,rgba(124,77,255,.15),rgba(0,229,255,.08))",
           border: "1px solid rgba(255,255,255,.08)",
-          borderRadius: 20,
-          padding: "20px 24px",
-          marginBottom: 12,
+          borderRadius: 20, padding: "20px 24px", marginBottom: 12,
           backdropFilter: "blur(20px)",
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{
-                  width: 44, height: 44, borderRadius: 14,
-                  background: "linear-gradient(135deg,#7c4dff,#00e5ff)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 22, animation: "glow 3s ease-in-out infinite",
-                }}>✦</div>
-                <div>
-                  <div style={{ fontFamily: "'Space Mono', monospace", fontWeight: 700, fontSize: 20, letterSpacing: ".5px" }}>
-                    ARIA
-                  </div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.4)", letterSpacing: "2px", textTransform: "uppercase" }}>
-                    Multimodal Live Agent
-                  </div>
-                </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 14,
+                background: "linear-gradient(135deg,#7c4dff,#00e5ff)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 22, animation: "glow 3s ease-in-out infinite",
+              }}>✦</div>
+              <div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontWeight: 700, fontSize: 20, letterSpacing: ".5px" }}>ARIA</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,.4)", letterSpacing: "2px", textTransform: "uppercase" }}>Multimodal Live Agent</div>
               </div>
             </div>
-
-            {/* Mode selector */}
             <div style={{ display: "flex", gap: 6 }}>
               {["chat","vision","creative"].map(m => (
                 <button key={m} onClick={() => setMode(m)} style={{
-                  padding: "6px 14px",
-                  borderRadius: 20,
+                  padding: "6px 14px", borderRadius: 20,
                   border: `1px solid ${mode === m ? modeColors[m] : "rgba(255,255,255,.1)"}`,
                   background: mode === m ? `${modeColors[m]}22` : "transparent",
                   color: mode === m ? modeColors[m] : "rgba(255,255,255,.4)",
                   fontSize: 11, fontWeight: 600, cursor: "pointer",
-                  textTransform: "uppercase", letterSpacing: "1px",
-                  transition: "all .2s",
+                  textTransform: "uppercase", letterSpacing: "1px", transition: "all .2s",
                 }}>{m}</button>
               ))}
             </div>
           </div>
-
-          {/* Status bar */}
           <div style={{ display: "flex", gap: 20, marginTop: 14, flexWrap: "wrap" }}>
             {[
               { icon: "◎", label: "Multimodal", color: "#00e5ff" },
@@ -392,59 +365,40 @@ export default function App() {
       </div>
 
       {/* Chat window */}
-      <div style={{
-        width: "100%", maxWidth: 720,
-        flex: 1,
-        padding: "0 20px",
-        display: "flex",
-        flexDirection: "column",
-      }}>
+      <div style={{ width: "100%", maxWidth: 720, flex: 1, padding: "0 20px", display: "flex", flexDirection: "column" }}>
         <div style={{
-          flex: 1,
-          minHeight: 340, maxHeight: 440,
-          overflowY: "auto",
+          flex: 1, minHeight: 340, maxHeight: 440, overflowY: "auto",
           padding: "20px",
           background: "rgba(255,255,255,.025)",
           border: "1px solid rgba(255,255,255,.06)",
-          borderRadius: 20,
-          marginBottom: 12,
+          borderRadius: 20, marginBottom: 12,
         }}>
           {messages.map((msg, i) => <Bubble key={i} msg={msg} />)}
           {error && (
             <div style={{
-              textAlign: "center", color: "#ff4081",
-              fontSize: 13, padding: "8px",
-              background: "rgba(255,64,129,.08)",
-              borderRadius: 10, marginTop: 8,
+              textAlign: "center", color: "#ff4081", fontSize: 13, padding: "8px",
+              background: "rgba(255,64,129,.08)", borderRadius: 10, marginTop: 8,
             }}>{error}</div>
           )}
           <div ref={bottomRef} />
         </div>
 
-        {/* Quick actions */}
         {imageBase64 && (
           <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
             {quickActions.map(a => (
               <button key={a.label} onClick={() => sendMessage(a.text)} disabled={loading} style={{
-                padding: "6px 12px",
-                borderRadius: 16,
+                padding: "6px 12px", borderRadius: 16,
                 border: "1px solid rgba(0,229,255,.3)",
-                background: "rgba(0,229,255,.06)",
-                color: "#00e5ff",
-                fontSize: 11, cursor: "pointer",
-                transition: "all .2s",
+                background: "rgba(0,229,255,.06)", color: "#00e5ff",
+                fontSize: 11, cursor: "pointer", transition: "all .2s",
               }}>{a.label}</button>
             ))}
           </div>
         )}
 
-        {/* Input area */}
         <div style={{
-          background: "rgba(255,255,255,.04)",
-          border: "1px solid rgba(255,255,255,.1)",
-          borderRadius: 18,
-          padding: "12px 16px",
-          backdropFilter: "blur(12px)",
+          background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)",
+          borderRadius: 18, padding: "12px 16px", backdropFilter: "blur(12px)",
         }}>
           {imagePreview && (
             <div style={{ marginBottom: 10 }}>
@@ -457,57 +411,46 @@ export default function App() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={mode === "vision" ? "Upload an image and ask anything…" : mode === "creative" ? "Describe your creative vision…" : "Ask ARIA anything…"}
+              placeholder={
+                mode === "vision" ? "Upload an image and ask anything…"
+                : mode === "creative" ? "Describe your creative vision…"
+                : "Ask ARIA anything…"
+              }
               rows={2}
               style={{
-                flex: 1, background: "transparent",
-                border: "none", color: "#f0f0f0",
-                fontSize: 14, lineHeight: 1.6,
+                flex: 1, background: "transparent", border: "none",
+                color: "#f0f0f0", fontSize: 14, lineHeight: 1.6,
                 fontFamily: "'Sora', sans-serif",
               }}
             />
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-              {/* Waveform */}
-              <div onClick={() => setListening(l => !l)} style={{ cursor: "pointer" }} title="Voice (UI only)">
+              <div onClick={() => setListening(l => !l)} style={{ cursor: "pointer" }} title="Voice toggle">
                 <Waveform active={listening} />
               </div>
-
-              {/* Upload */}
               <button onClick={() => fileRef.current?.click()} style={{
                 width: 38, height: 38, borderRadius: "50%",
-                background: "rgba(124,77,255,.2)",
-                border: "1px solid rgba(124,77,255,.5)",
+                background: "rgba(124,77,255,.2)", border: "1px solid rgba(124,77,255,.5)",
                 color: "#7c4dff", fontSize: 16, cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "all .2s",
               }} title="Upload image">🖼</button>
               <input ref={fileRef} type="file" accept="image/*"
                 style={{ display: "none" }}
                 onChange={e => handleImage(e.target.files[0])} />
-
-              {/* Send */}
               <button onClick={() => sendMessage()} disabled={loading || (!input.trim() && !imageBase64)} style={{
                 width: 38, height: 38, borderRadius: "50%",
                 background: loading ? "rgba(0,229,255,.1)" : "linear-gradient(135deg,#7c4dff,#00e5ff)",
-                border: "none", color: "#fff", fontSize: 16, cursor: loading ? "not-allowed" : "pointer",
+                border: "none", color: "#fff", fontSize: 16,
+                cursor: loading ? "not-allowed" : "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "all .2s",
                 opacity: loading ? .5 : 1,
               }}>
-                {loading
-                  ? <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>◌</span>
-                  : "➤"}
+                {loading ? <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>◌</span> : "➤"}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div style={{
-          textAlign: "center", fontSize: 11,
-          color: "rgba(255,255,255,.2)", marginTop: 12,
-          letterSpacing: "1px",
-        }}>
+        <div style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,.2)", marginTop: 12, letterSpacing: "1px" }}>
           ARIA · Gemini Live Agent Challenge · Powered by Multimodal AI
         </div>
       </div>
