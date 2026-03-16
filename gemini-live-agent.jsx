@@ -244,7 +244,12 @@ export default function App() {
 
       const resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "ignored",
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
         body: JSON.stringify({
           model: MODEL,
           max_tokens: 1000,
@@ -252,6 +257,11 @@ export default function App() {
           messages: apiMessages,
         }),
       });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `HTTP ${resp.status}`);
+      }
 
       const data = await resp.json();
       const reply = data.content?.find(b => b.type === "text")?.text || "Sorry, I couldn't generate a response.";
